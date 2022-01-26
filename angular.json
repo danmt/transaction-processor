@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "projects": {
+    "web-client": "apps/web-client",
+    "web-client-e2e": "apps/web-client-e2e"
+  }
+}
