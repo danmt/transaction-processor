@@ -3,8 +3,9 @@ import { WalletStore } from '@heavy-duty/wallet-adapter';
 import { WalletName, WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import { concatMap, map, of } from 'rxjs';
+import { concatMap, filter, map, of, startWith, switchMap, tap } from 'rxjs';
 import { SolanaRpcApiService } from './solana-rpc-api.service';
+import { SolanaRpcSocketService } from './solana-rpc-socket.service';
 import { SystemProgramApiService } from './system-program-api.service';
 
 @Component({
@@ -28,11 +29,18 @@ import { SystemProgramApiService } from './system-program-api.service';
 
       <ng-container *ngIf="walletName$ | async as walletName">
         <ng-container *ngIf="walletPublicKey$ | async as walletPublicKey">
-          <ng-container *ngIf="walletBalance$ | async as walletBalance">
+          <ng-container
+            *ngIf="walletAccountLamports$ | async as walletAccountLamports"
+          >
             <p>
               {{ walletName }} CONNECTED | Address:
-              {{ walletPublicKey.toBase58() }} (LAMPORTS: {{ walletBalance }})
+              {{ walletPublicKey.toBase58() }} (LAMPORTS:
+              {{ walletAccountLamports }})
             </p>
+
+            <button (click)="onAccountUnsubscribe(walletPublicKey)">
+              Unsubscribe
+            </button>
           </ng-container>
         </ng-container>
       </ng-container>
@@ -70,22 +78,59 @@ export class AppComponent implements OnInit {
   readonly walletName$ = this._walletStore.wallet$.pipe(
     map((wallet) => wallet?.adapter.name || null)
   );
-  readonly walletBalance$ = this._walletStore.publicKey$.pipe(
-    concatMap((publicKey) =>
-      publicKey
-        ? this._solanaRpcApiService.getBalance(publicKey.toBase58())
-        : of(null)
-    )
+  readonly walletAccount$ = this._walletStore.publicKey$.pipe(
+    concatMap((publicKey) => {
+      if (!publicKey) {
+        return of(null);
+      }
+
+      return this._solanaRpcApiService
+        .getAccountInfo(publicKey.toBase58())
+        .pipe(
+          tap((a) => console.log('da f¿?', a)),
+          switchMap((accountInfo) =>
+            this._solanaRpcSocketService.accountChange$.pipe(
+              tap((a) =>
+                console.log(
+                  a,
+                  a.pubkey,
+                  publicKey.toBase58(),
+                  a.pubkey === publicKey.toBase58()
+                )
+              ),
+              filter(({ pubkey }) => pubkey === publicKey.toBase58()),
+              map(({ accountInfo }) => accountInfo),
+              startWith(accountInfo)
+            )
+          )
+        );
+    })
+  );
+  readonly walletAccountLamports$ = this.walletAccount$.pipe(
+    map((accountInfo) => (accountInfo ? accountInfo.lamports : null))
   );
 
   constructor(
     private readonly _walletStore: WalletStore,
     private readonly _solanaRpcApiService: SolanaRpcApiService,
+    private readonly _solanaRpcSocketService: SolanaRpcSocketService,
     private readonly _systemProgramApiService: SystemProgramApiService
   ) {}
 
   ngOnInit() {
     this._walletStore.setAdapters([new PhantomWalletAdapter()]);
+
+    this._walletStore.publicKey$
+      .pipe(
+        switchMap((publicKey) => {
+          return publicKey
+            ? this._solanaRpcSocketService.accountSubscribe(
+                publicKey.toBase58()
+              )
+            : of(null);
+        })
+      )
+      .subscribe();
   }
 
   onConnect() {
@@ -107,6 +152,12 @@ export class AppComponent implements OnInit {
         toPubkey: Keypair.generate().publicKey,
         lamports: 1,
       })
+      .subscribe();
+  }
+
+  onAccountUnsubscribe(walletPublicKey: PublicKey) {
+    this._solanaRpcSocketService
+      .accountUnsubscribe(walletPublicKey.toBase58())
       .subscribe();
   }
 }

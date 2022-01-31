@@ -4,6 +4,7 @@
 
 export const environment = {
   production: false,
+  rpcWebsocket: 'wss://api.devnet.solana.com',
   rpcEndpoint: 'https://api.devnet.solana.com',
   network: 'devnet',
 };
