@@ -24,6 +24,14 @@ export class SolanaRpcInterceptor implements HttpInterceptor {
     }
 
     const rpcMethod = httpRequest.headers.get('solana-rpc-method');
+    const headers = new HttpHeaders({
+      'content-type': 'application/json',
+    });
+    const baseBody = {
+      jsonrpc: '2.0',
+      method: rpcMethod,
+      id: uuid(),
+    };
 
     if (rpcMethod === 'sendTransaction') {
       const signer = this._walletStore.signTransaction(httpRequest.body);
@@ -38,18 +46,14 @@ export class SolanaRpcInterceptor implements HttpInterceptor {
             httpRequest.clone({
               body: JSON.stringify([
                 {
-                  jsonrpc: '2.0',
-                  method: rpcMethod,
-                  id: uuid(),
+                  ...baseBody,
                   params: [
                     transaction.serialize().toString('base64'),
                     { encoding: 'base64' },
                   ],
                 },
               ]),
-              headers: new HttpHeaders({
-                'content-type': 'application/json',
-              }),
+              headers,
             })
           )
         )
@@ -59,9 +63,7 @@ export class SolanaRpcInterceptor implements HttpInterceptor {
         httpRequest.clone({
           body: JSON.stringify([
             {
-              jsonrpc: '2.0',
-              method: rpcMethod,
-              id: uuid(),
+              ...baseBody,
               params:
                 httpRequest.body === null
                   ? []
@@ -70,7 +72,7 @@ export class SolanaRpcInterceptor implements HttpInterceptor {
                   : [httpRequest.body],
             },
           ]),
-          headers: new HttpHeaders({ 'content-type': 'application/json' }),
+          headers,
         })
       );
     }

@@ -72,7 +72,9 @@ export class AppComponent implements OnInit {
   );
   readonly walletBalance$ = this._walletStore.publicKey$.pipe(
     concatMap((publicKey) =>
-      publicKey ? this._solanaRpcApiService.getBalance(publicKey) : of(null)
+      publicKey
+        ? this._solanaRpcApiService.getBalance(publicKey.toBase58())
+        : of(null)
     )
   );
 

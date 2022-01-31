@@ -36,14 +36,14 @@ export class SolanaRpcApiService {
     );
   }
 
-  getAccountInfo(pubkey: PublicKey) {
+  getAccountInfo(pubkey: string) {
     return this._rpcRequest<{
       value: AccountInfo<string>;
       context: { slot: number };
     }>('getAccountInfo', pubkey).pipe(map(({ value }) => value));
   }
 
-  getBalance(pubkey: PublicKey) {
+  getBalance(pubkey: string) {
     return this._rpcRequest<{ value: number }>('getBalance', pubkey).pipe(
       map(({ value }) => value)
     );
