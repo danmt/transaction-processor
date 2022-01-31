@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { PublicKey, Transaction } from '@solana/web3.js';
+import { AccountInfo, PublicKey, Transaction } from '@solana/web3.js';
 import { concatMap, map, Observable } from 'rxjs';
 import { environment } from '../environments/environment';
 
@@ -37,7 +37,10 @@ export class SolanaRpcApiService {
   }
 
   getAccountInfo(pubkey: PublicKey) {
-    return this._rpcRequest('getAccountInfo', pubkey);
+    return this._rpcRequest<{
+      value: AccountInfo<string>;
+      context: { slot: number };
+    }>('getAccountInfo', pubkey).pipe(map(({ value }) => value));
   }
 
   getBalance(pubkey: PublicKey) {
