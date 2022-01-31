@@ -4,6 +4,7 @@ import { WalletName, WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { concatMap, map, of } from 'rxjs';
+import { SolanaRpcApiService } from './solana-rpc-api.service';
 import { SystemProgramApiService } from './system-program-api.service';
 
 @Component({
@@ -71,12 +72,13 @@ export class AppComponent implements OnInit {
   );
   readonly walletBalance$ = this._walletStore.publicKey$.pipe(
     concatMap((publicKey) =>
-      publicKey ? this._systemProgramApiService.getBalance(publicKey) : of(null)
+      publicKey ? this._solanaRpcApiService.getBalance(publicKey) : of(null)
     )
   );
 
   constructor(
     private readonly _walletStore: WalletStore,
+    private readonly _solanaRpcApiService: SolanaRpcApiService,
     private readonly _systemProgramApiService: SystemProgramApiService
   ) {}
 
@@ -98,7 +100,11 @@ export class AppComponent implements OnInit {
 
   onSendTransaction(walletPublicKey: PublicKey) {
     this._systemProgramApiService
-      .nativeTransfer(walletPublicKey, Keypair.generate().publicKey, 1)
+      .transfer({
+        fromPubkey: walletPublicKey,
+        toPubkey: Keypair.generate().publicKey,
+        lamports: 1,
+      })
       .subscribe();
   }
 }

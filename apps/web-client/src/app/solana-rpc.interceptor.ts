@@ -10,18 +10,8 @@ import { WalletStore } from '@heavy-duty/wallet-adapter';
 import { concatMap, Observable, throwError } from 'rxjs';
 import { v4 as uuid } from 'uuid';
 
-export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {
-  if (Buffer.isBuffer(arr)) {
-    return arr;
-  } else if (arr instanceof Uint8Array) {
-    return Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength);
-  } else {
-    return Buffer.from(arr);
-  }
-};
-
 @Injectable()
-export class SolanaAuthInterceptor implements HttpInterceptor {
+export class SolanaRpcInterceptor implements HttpInterceptor {
   constructor(private _walletStore: WalletStore) {}
 
   intercept(
@@ -29,11 +19,11 @@ export class SolanaAuthInterceptor implements HttpInterceptor {
     httpRequest: HttpRequest<any>,
     next: HttpHandler
   ): Observable<HttpEvent<string>> {
-    if (!httpRequest.headers.has('solana-network')) {
+    if (!httpRequest.headers.has('solana-rpc-method')) {
       return next.handle(httpRequest);
     }
 
-    const rpcMethod = httpRequest.headers.get('rpc-method');
+    const rpcMethod = httpRequest.headers.get('solana-rpc-method');
 
     if (rpcMethod === 'sendTransaction') {
       const signer = this._walletStore.signTransaction(httpRequest.body);
@@ -49,10 +39,10 @@ export class SolanaAuthInterceptor implements HttpInterceptor {
               body: JSON.stringify([
                 {
                   jsonrpc: '2.0',
-                  method: 'sendTransaction',
+                  method: rpcMethod,
                   id: uuid(),
                   params: [
-                    toBuffer(transaction.serialize()).toString('base64'),
+                    transaction.serialize().toString('base64'),
                     { encoding: 'base64' },
                   ],
                 },

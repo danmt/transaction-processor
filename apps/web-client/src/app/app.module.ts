@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 import { HdWalletAdapterModule } from '@heavy-duty/wallet-adapter';
 import { AppComponent } from './app.component';
-import { SolanaAuthInterceptor } from './solana-auth.interceptor';
+import { SolanaRpcInterceptor } from './solana-rpc.interceptor';
 
 @NgModule({
   declarations: [AppComponent],
@@ -19,7 +19,7 @@ import { SolanaAuthInterceptor } from './solana-auth.interceptor';
   providers: [
     {
       provide: HTTP_INTERCEPTORS,
-      useClass: SolanaAuthInterceptor,
+      useClass: SolanaRpcInterceptor,
       multi: true,
     },
   ],
