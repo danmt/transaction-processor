@@ -1,14 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { ConnectionStore, WalletStore } from '@heavy-duty/wallet-adapter';
+import { WalletStore } from '@heavy-duty/wallet-adapter';
 import { WalletName, WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
-import {
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from '@solana/web3.js';
-import { concatMap, defer, from, map, of } from 'rxjs';
+import { Keypair, PublicKey } from '@solana/web3.js';
+import { concatMap, map, of } from 'rxjs';
+import { SystemProgramApiService } from './system-program-api.service';
 
 @Component({
   selector: 'transaction-processor-root',
@@ -28,6 +24,17 @@ import { concatMap, defer, from, map, of } from 'rxjs';
           {{ wallet.adapter.name }} ({{ wallet.readyState }})
         </option>
       </select>
+
+      <ng-container *ngIf="walletName$ | async as walletName">
+        <ng-container *ngIf="walletPublicKey$ | async as walletPublicKey">
+          <ng-container *ngIf="walletBalance$ | async as walletBalance">
+            <p>
+              {{ walletName }} CONNECTED | Address:
+              {{ walletPublicKey.toBase58() }} (LAMPORTS: {{ walletBalance }})
+            </p>
+          </ng-container>
+        </ng-container>
+      </ng-container>
 
       <button
         *ngIf="(connected$ | async) === false"
@@ -62,14 +69,18 @@ export class AppComponent implements OnInit {
   readonly walletName$ = this._walletStore.wallet$.pipe(
     map((wallet) => wallet?.adapter.name || null)
   );
+  readonly walletBalance$ = this._walletStore.publicKey$.pipe(
+    concatMap((publicKey) =>
+      publicKey ? this._systemProgramApiService.getBalance(publicKey) : of(null)
+    )
+  );
 
   constructor(
-    private readonly _connectionStore: ConnectionStore,
-    private readonly _walletStore: WalletStore
+    private readonly _walletStore: WalletStore,
+    private readonly _systemProgramApiService: SystemProgramApiService
   ) {}
 
   ngOnInit() {
-    this._connectionStore.setEndpoint('https://api.devnet.solana.com');
     this._walletStore.setAdapters([new PhantomWalletAdapter()]);
   }
 
@@ -86,32 +97,8 @@ export class AppComponent implements OnInit {
   }
 
   onSendTransaction(walletPublicKey: PublicKey) {
-    this._connectionStore.connection$
-      .pipe(
-        concatMap((connection) => {
-          if (!connection) {
-            return of(null);
-          }
-
-          return from(defer(() => connection?.getRecentBlockhash())).pipe(
-            concatMap(({ blockhash }) =>
-              this._walletStore.sendTransaction(
-                new Transaction({
-                  feePayer: walletPublicKey,
-                  recentBlockhash: blockhash,
-                }).add(
-                  SystemProgram.transfer({
-                    fromPubkey: walletPublicKey,
-                    toPubkey: Keypair.generate().publicKey,
-                    lamports: 1,
-                  })
-                ),
-                connection
-              )
-            )
-          );
-        })
-      )
+    this._systemProgramApiService
+      .nativeTransfer(walletPublicKey, Keypair.generate().publicKey, 1)
       .subscribe();
   }
 }

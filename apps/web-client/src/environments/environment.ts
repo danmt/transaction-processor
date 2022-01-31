@@ -4,6 +4,8 @@
 
 export const environment = {
   production: false,
+  rpcEndpoint: 'https://api.devnet.solana.com',
+  network: 'devnet',
 };
 
 /*
