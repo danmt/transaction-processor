@@ -36,7 +36,7 @@ type RpcMessage =
   | RpcNotification<null>
   | RpcNotification<RpcAccountParamsNotification>;
 
-const PING_DELAY_MS = 5_000;
+const PING_DELAY_MS = 30_000;
 
 @Injectable({ providedIn: 'root' })
 export class SolanaRpcSocketService {
@@ -46,9 +46,7 @@ export class SolanaRpcSocketService {
   private readonly _subject = webSocket<RpcMessage>({
     url: environment.rpcWebsocket,
     openObserver: {
-      next: (event) => {
-        console.log('connection open', event);
-
+      next: () => {
         setInterval(
           () =>
             this._subject.next({
@@ -62,16 +60,8 @@ export class SolanaRpcSocketService {
         this._connected.next(true);
       },
     },
-    closingObserver: {
-      next: (event) => {
-        console.log('closing connection', event);
-      },
-    },
     closeObserver: {
-      next: (event) => {
-        console.log('connection closed', event);
-        this._connected.next(false);
-      },
+      next: () => this._connected.next(false),
     },
   });
 
@@ -100,8 +90,6 @@ export class SolanaRpcSocketService {
           params: [subscriptionId],
         }),
         (message: RpcMessage) => {
-          console.log(message);
-
           if ('id' in message && message.id === correlationId) {
             subscriptionId = message.result;
           }
