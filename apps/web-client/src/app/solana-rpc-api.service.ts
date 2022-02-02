@@ -5,6 +5,7 @@ import {
   PublicKey,
   SignatureStatus,
   Transaction,
+  TransactionResponse,
 } from '@solana/web3.js';
 import { concatMap, map, Observable } from 'rxjs';
 import { environment } from '../environments/environment';
@@ -66,6 +67,10 @@ export class SolanaRpcApiService {
       'getSignatureStatuses',
       [[signature], { searchTransactionHistory: true }]
     ).pipe(map(({ value: [status] }) => status));
+  }
+
+  getTransaction(signature: string) {
+    return this._rpcRequest<TransactionResponse>('getTransaction', signature);
   }
 
   sendTransaction(transaction: Transaction) {
