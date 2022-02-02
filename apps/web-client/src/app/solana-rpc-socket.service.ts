@@ -6,7 +6,6 @@ import {
   first,
   map,
   Observable,
-  Subject,
   switchMap,
 } from 'rxjs';
 import { webSocket } from 'rxjs/webSocket';
@@ -56,8 +55,10 @@ const PING_DELAY_MS = 30_000;
 export class SolanaRpcSocketService {
   private readonly _connected = new BehaviorSubject(false);
   readonly connected$ = this._connected.asObservable();
-  messageSubject = new Subject();
-  private readonly _subject = new BehaviorSubject(this._createWebSocket());
+  private readonly _webSocketSubject = new BehaviorSubject(
+    this._createWebSocket()
+  );
+  private readonly _webSocketSubject$ = this._webSocketSubject.asObservable();
 
   private _createWebSocket() {
     let interval: NodeJS.Timer;
@@ -93,72 +94,63 @@ export class SolanaRpcSocketService {
   }
 
   connect() {
-    this._subject.next(this._createWebSocket());
+    this._webSocketSubject.next(this._createWebSocket());
   }
 
   disconnect() {
-    this._subject
+    this._webSocketSubject
       .asObservable()
       .pipe(first())
-      .subscribe((subject) => subject.complete());
+      .subscribe((webSocketSubject) => webSocketSubject.complete());
   }
 
   onAccountChange(
     accountId: string,
     commitment: Commitment = 'confirmed'
   ): Observable<AccountInfo<Buffer>> {
-    const correlationId = uuid();
-    let subscriptionId: number;
+    return this._webSocketSubject$.pipe(
+      switchMap((webSocketSubject) => {
+        const correlationId = uuid();
+        let subscriptionId: number;
 
-    if (!this._subject) {
-      throw new Error('WebSocketSubject is null');
-    }
-
-    return this._subject.asObservable().pipe(
-      switchMap((subject) =>
-        subject
-          .multiplex(
-            () => ({
-              jsonrpc: '2.0',
-              id: correlationId,
-              method: 'accountSubscribe',
-              params: [
-                accountId,
-                {
-                  encoding: 'base64',
-                  commitment,
-                },
-              ],
-            }),
-            () => ({
-              jsonrpc: '2.0',
-              id: uuid(),
-              method: 'accountUnsubscribe',
-              params: [subscriptionId],
-            }),
-            (message: RpcMessage) => {
-              if ('id' in message && message.id === correlationId) {
-                subscriptionId = message.result;
-              }
-
-              return (
-                'method' in message &&
-                message.method === 'accountNotification' &&
-                message.params !== null &&
-                message.params.subscription === subscriptionId
-              );
+        return webSocketSubject.multiplex(
+          () => ({
+            jsonrpc: '2.0',
+            id: correlationId,
+            method: 'accountSubscribe',
+            params: [
+              accountId,
+              {
+                encoding: 'base64',
+                commitment,
+              },
+            ],
+          }),
+          () => ({
+            jsonrpc: '2.0',
+            id: uuid(),
+            method: 'accountUnsubscribe',
+            params: [subscriptionId],
+          }),
+          (message: RpcMessage) => {
+            if ('id' in message && message.id === correlationId) {
+              subscriptionId = message.result;
             }
-          )
-          .pipe(
-            filter(
-              (
-                message
-              ): message is RpcNotification<RpcAccountParamsNotification> =>
-                'method' in message
-            ),
-            map((message) => message.params.result.value)
-          )
-      )
+
+            return (
+              'method' in message &&
+              message.method === 'accountNotification' &&
+              message.params !== null &&
+              message.params.subscription === subscriptionId
+            );
+          }
+        );
+      }),
+      filter(
+        (message): message is RpcNotification<RpcAccountParamsNotification> =>
+          'method' in message
+      ),
+      map((message) => message.params.result.value)
     );
   }
 
@@ -166,57 +158,48 @@ export class SolanaRpcSocketService {
     signature: string,
     commitment: Commitment = 'confirmed'
   ): Observable<{ err: unknown }> {
-    const correlationId = uuid();
-    let subscriptionId: number;
+    return this._webSocketSubject$.pipe(
+      switchMap((webSocketSubject) => {
+        const correlationId = uuid();
+        let subscriptionId: number;
 
-    if (!this._subject) {
-      throw new Error('WebSocketSubject is null');
-    }
-
-    return this._subject.asObservable().pipe(
-      switchMap((subject) =>
-        subject
-          .multiplex(
-            () => ({
-              jsonrpc: '2.0',
-              id: correlationId,
-              method: 'signatureSubscribe',
-              params: [
-                signature,
-                {
-                  commitment,
-                },
-              ],
-            }),
-            () => ({
-              jsonrpc: '2.0',
-              id: uuid(),
-              method: 'signatureUnsubscribe',
-              params: [subscriptionId],
-            }),
-            (message: RpcMessage) => {
-              if ('id' in message && message.id === correlationId) {
-                subscriptionId = message.result;
-              }
-
-              return (
-                'method' in message &&
-                message.method === 'signatureNotification' &&
-                message.params !== null &&
-                message.params.subscription === subscriptionId
-              );
+        return webSocketSubject.multiplex(
+          () => ({
+            jsonrpc: '2.0',
+            id: correlationId,
+            method: 'signatureSubscribe',
+            params: [
+              signature,
+              {
+                commitment,
+              },
+            ],
+          }),
+          () => ({
+            jsonrpc: '2.0',
+            id: uuid(),
+            method: 'signatureUnsubscribe',
+            params: [subscriptionId],
+          }),
+          (message: RpcMessage) => {
+            if ('id' in message && message.id === correlationId) {
+              subscriptionId = message.result;
             }
-          )
-          .pipe(
-            filter(
-              (
-                message
-              ): message is RpcNotification<RpcSignatureParamsNotification> =>
-                'method' in message
-            ),
-            map((message) => message.params.result.value)
-          )
-      )
+
+            return (
+              'method' in message &&
+              message.method === 'signatureNotification' &&
+              message.params !== null &&
+              message.params.subscription === subscriptionId
+            );
+          }
+        );
+      }),
+      filter(
+        (message): message is RpcNotification<RpcSignatureParamsNotification> =>
+          'method' in message
+      ),
+      map((message) => message.params.result.value)
     );
   }
 }
