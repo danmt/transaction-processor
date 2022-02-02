@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { AccountInfo } from '@solana/web3.js';
+import { AccountInfo, Commitment } from '@solana/web3.js';
 import { BehaviorSubject, filter, map, Observable, Subject } from 'rxjs';
 import { webSocket } from 'rxjs/webSocket';
 import { v4 as uuid } from 'uuid';
@@ -31,9 +31,15 @@ interface RpcNotification<T> {
   params: T;
 }
 
+interface RpcSignatureParamsNotification {
+  result: RpcResponseAndContext<{ err: unknown }>;
+  subscription: number;
+}
+
 type RpcMessage =
   | RpcResultNotification
   | RpcNotification<null>
+  | RpcNotification<RpcSignatureParamsNotification>
   | RpcNotification<RpcAccountParamsNotification>;
 
 const PING_DELAY_MS = 30_000;
@@ -65,7 +71,10 @@ export class SolanaRpcSocketService {
     },
   });
 
-  onAccountChange(accountId: string): Observable<AccountInfo<Buffer>> {
+  onAccountChange(
+    accountId: string,
+    commitment: Commitment = 'confirmed'
+  ): Observable<AccountInfo<Buffer>> {
     const correlationId = uuid();
     let subscriptionId: number;
 
@@ -79,7 +88,7 @@ export class SolanaRpcSocketService {
             accountId,
             {
               encoding: 'base64',
-              commitment: 'finalized',
+              commitment,
             },
           ],
         }),
@@ -105,6 +114,56 @@ export class SolanaRpcSocketService {
       .pipe(
         filter(
           (message): message is RpcNotification<RpcAccountParamsNotification> =>
+            'method' in message
+        ),
+        map((message) => message.params.result.value)
+      );
+  }
+
+  onSignatureChange(
+    signature: string,
+    commitment: Commitment = 'confirmed'
+  ): Observable<{ err: unknown }> {
+    const correlationId = uuid();
+    let subscriptionId: number;
+
+    return this._subject
+      .multiplex(
+        () => ({
+          jsonrpc: '2.0',
+          id: correlationId,
+          method: 'signatureSubscribe',
+          params: [
+            signature,
+            {
+              commitment,
+            },
+          ],
+        }),
+        () => ({
+          jsonrpc: '2.0',
+          id: uuid(),
+          method: 'signatureUnsubscribe',
+          params: [subscriptionId],
+        }),
+        (message: RpcMessage) => {
+          if ('id' in message && message.id === correlationId) {
+            subscriptionId = message.result;
+          }
+
+          return (
+            'method' in message &&
+            message.method === 'signatureNotification' &&
+            message.params !== null &&
+            message.params.subscription === subscriptionId
+          );
+        }
+      )
+      .pipe(
+        filter(
+          (
+            message
+          ): message is RpcNotification<RpcSignatureParamsNotification> =>
             'method' in message
         ),
         map((message) => message.params.result.value)

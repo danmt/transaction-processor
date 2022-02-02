@@ -1,6 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { AccountInfo, PublicKey, Transaction } from '@solana/web3.js';
+import {
+  AccountInfo,
+  PublicKey,
+  SignatureStatus,
+  Transaction,
+} from '@solana/web3.js';
 import { concatMap, map, Observable } from 'rxjs';
 import { environment } from '../environments/environment';
 
@@ -54,6 +59,13 @@ export class SolanaRpcApiService {
       'getRecentBlockhash',
       null
     ).pipe(map(({ value }) => value));
+  }
+
+  getSignatureStatus(signature: string): Observable<SignatureStatus> {
+    return this._rpcRequest<{ value: SignatureStatus[] }>(
+      'getSignatureStatuses',
+      [[signature], { searchTransactionHistory: true }]
+    ).pipe(map(({ value: [status] }) => status));
   }
 
   sendTransaction(transaction: Transaction) {

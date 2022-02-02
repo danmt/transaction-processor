@@ -3,7 +3,17 @@ import { WalletStore } from '@heavy-duty/wallet-adapter';
 import { WalletName, WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import { concatMap, map, of, startWith, switchMap } from 'rxjs';
+import {
+  concatMap,
+  first,
+  interval,
+  map,
+  of,
+  startWith,
+  switchMap,
+  takeWhile,
+  tap,
+} from 'rxjs';
 import { SolanaRpcApiService } from './solana-rpc-api.service';
 import { SolanaRpcSocketService } from './solana-rpc-socket.service';
 import { SystemProgramApiService } from './system-program-api.service';
@@ -131,6 +141,29 @@ export class AppComponent implements OnInit {
         toPubkey: Keypair.generate().publicKey,
         lamports: 1,
       })
+      .pipe(
+        tap(() => console.log('transaction sent')),
+        concatMap((signature) =>
+          this._solanaRpcSocketService.onSignatureChange(signature).pipe(
+            first(),
+            tap(() => console.log('transaction confirmed')),
+            concatMap(() =>
+              interval(1000).pipe(
+                concatMap(() =>
+                  this._solanaRpcApiService
+                    .getSignatureStatus(signature)
+                    .pipe(tap((a) => console.log('transaction status ->', a)))
+                ),
+                takeWhile(
+                  (signatureStatus) =>
+                    signatureStatus?.confirmationStatus !== 'finalized'
+                ),
+                tap({ complete: () => console.log('transaction finalized') })
+              )
+            )
+          )
+        )
+      )
       .subscribe();
   }
 }
