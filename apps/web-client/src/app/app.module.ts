@@ -7,6 +7,7 @@ import { AppComponent } from './app.component';
 import { ConnectivityStatusDirective } from './connectivity-status.directive';
 import { SolanaAuthInterceptor } from './solana-auth.interceptor';
 import { SolanaRpcInterceptor } from './solana-rpc.interceptor';
+import { TransactionTrackerInterceptor } from './transaction-tracker.interceptor';
 
 @NgModule({
   declarations: [AppComponent, ConnectivityStatusDirective],
@@ -22,6 +23,11 @@ import { SolanaRpcInterceptor } from './solana-rpc.interceptor';
     {
       provide: HTTP_INTERCEPTORS,
       useClass: SolanaAuthInterceptor,
+      multi: true,
+    },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: TransactionTrackerInterceptor,
       multi: true,
     },
     {

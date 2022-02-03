@@ -37,7 +37,7 @@ export class SolanaRpcInterceptor implements HttpInterceptor {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     httpRequest: HttpRequest<any>
   ) {
-    return !!httpRequest.headers.has('solana-rpc-method');
+    return httpRequest.headers.has('solana-rpc-method');
   }
 
   intercept(

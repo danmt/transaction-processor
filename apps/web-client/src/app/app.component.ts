@@ -3,21 +3,12 @@ import { WalletStore } from '@heavy-duty/wallet-adapter';
 import { WalletName, WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import {
-  combineLatest,
-  concatMap,
-  first,
-  interval,
-  map,
-  of,
-  startWith,
-  switchMap,
-  takeWhile,
-} from 'rxjs';
+import { combineLatest, concatMap, map, of, startWith, switchMap } from 'rxjs';
 import { ConnectivityStatusService } from './connectivity-status.service';
 import { SolanaRpcApiService } from './solana-rpc-api.service';
 import { SolanaRpcSocketService } from './solana-rpc-socket.service';
 import { SystemProgramApiService } from './system-program-api.service';
+import { TransactionTrackerStore } from './transaction-tracker.store';
 
 @Component({
   selector: 'transaction-processor-root',
@@ -44,20 +35,6 @@ import { SystemProgramApiService } from './system-program-api.service';
           </option>
         </select>
 
-        <ng-container *ngIf="walletName$ | async as walletName">
-          <ng-container *ngIf="walletPublicKey$ | async as walletPublicKey">
-            <ng-container
-              *ngIf="walletAccountLamports$ | async as walletAccountLamports"
-            >
-              <p>
-                {{ walletName }} CONNECTED | Address:
-                {{ walletPublicKey.toBase58() }} (LAMPORTS:
-                {{ walletAccountLamports }})
-              </p>
-            </ng-container>
-          </ng-container>
-        </ng-container>
-
         <button
           *ngIf="(connected$ | async) === false"
           (click)="onConnect()"
@@ -71,12 +48,51 @@ import { SystemProgramApiService } from './system-program-api.service';
       </header>
 
       <main>
-        <button
-          *ngIf="walletPublicKey$ | async as walletPublicKey"
-          (click)="onSendTransaction(walletPublicKey)"
-        >
-          Send transaction
-        </button>
+        <section *ngIf="walletName$ | async as walletName">
+          <p>
+            {{ walletName }}
+            <ng-container *ngIf="walletPublicKey$ | async as walletPublicKey">
+              CONNECTED | Address: {{ walletPublicKey.toBase58() }} (LAMPORTS:
+            </ng-container>
+            <ng-container
+              *ngIf="walletAccountLamports$ | async as walletAccountLamports"
+            >
+              {{ walletAccountLamports }})
+            </ng-container>
+          </p>
+        </section>
+
+        <section>
+          <header>
+            <h2>
+              Transactions
+              <ng-container *ngIf="transactionInProcess$ | async">
+                [PROCESSING]
+              </ng-container>
+            </h2>
+          </header>
+
+          <button
+            *ngIf="walletPublicKey$ | async as walletPublicKey"
+            (click)="onSendTransaction(walletPublicKey)"
+          >
+            Send transaction
+          </button>
+
+          <ol>
+            <li *ngFor="let transactionStatus of transactionStatuses$ | async">
+              {{ transactionStatus.signature }} [ Status:
+              {{ transactionStatus.confirmationStatus ?? 'pending' }}
+              <ng-container
+                *ngIf="transactionStatus.confirmationStatus === 'confirmed'"
+              >
+                ({{ transactionStatus.signatureStatus?.confirmations ?? 0 }}
+                confirmations...)
+              </ng-container>
+              ]
+            </li>
+          </ol>
+        </section>
       </main>
     </ng-container>
   `,
@@ -117,13 +133,17 @@ export class AppComponent implements OnInit {
   );
   readonly rpcConnected$ = this._solanaRpcSocketService.connected$;
   readonly online$ = this._connectivityStatusService.online$;
+  readonly transactionStatuses$ =
+    this._transactionTrackerStore.transactionStatuses$;
+  readonly transactionInProcess$ = this._transactionTrackerStore.isProcessing$;
 
   constructor(
     private readonly _connectivityStatusService: ConnectivityStatusService,
     private readonly _walletStore: WalletStore,
     private readonly _solanaRpcApiService: SolanaRpcApiService,
     private readonly _solanaRpcSocketService: SolanaRpcSocketService,
-    private readonly _systemProgramApiService: SystemProgramApiService
+    private readonly _systemProgramApiService: SystemProgramApiService,
+    private readonly _transactionTrackerStore: TransactionTrackerStore
   ) {}
 
   ngOnInit() {
@@ -157,37 +177,6 @@ export class AppComponent implements OnInit {
         toPubkey: Keypair.generate().publicKey,
         lamports: 1,
       })
-      .pipe(
-        concatMap((signature) =>
-          combineLatest({
-            signature: this._solanaRpcSocketService
-              .onSignatureChange(signature)
-              .pipe(
-                first(),
-                concatMap(() =>
-                  interval(1000).pipe(
-                    concatMap(() =>
-                      this._solanaRpcApiService.getSignatureStatus(signature)
-                    ),
-                    takeWhile(
-                      (signatureStatus) =>
-                        signatureStatus?.confirmationStatus !== 'finalized'
-                    )
-                  )
-                )
-              ),
-            transaction: this._solanaRpcSocketService
-              .onSignatureChange(signature, 'finalized')
-              .pipe(
-                first(),
-                concatMap(() =>
-                  this._solanaRpcApiService.getTransaction(signature)
-                ),
-                startWith(null)
-              ),
-          })
-        )
-      )
       .subscribe();
   }
 }
