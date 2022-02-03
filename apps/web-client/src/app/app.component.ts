@@ -2,13 +2,11 @@ import { Component, OnInit } from '@angular/core';
 import { WalletStore } from '@heavy-duty/wallet-adapter';
 import { WalletName, WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { combineLatest, concatMap, map, of, startWith, switchMap } from 'rxjs';
-import { ConnectivityStatusService } from './connectivity-status.service';
-import { SolanaRpcApiService } from './solana-rpc-api.service';
-import { SolanaRpcSocketService } from './solana-rpc-socket.service';
-import { SystemProgramApiService } from './system-program-api.service';
-import { TransactionTrackerStore } from './transaction-tracker.store';
+import { ConnectivityStatusService } from './connectivity-status';
+import { SolanaRpcApiService, SolanaRpcSocketService } from './solana-rpc';
+import { TransactionTrackerStore } from './transaction-tracker';
 
 @Component({
   selector: 'transaction-processor-root',
@@ -142,7 +140,6 @@ export class AppComponent implements OnInit {
     private readonly _walletStore: WalletStore,
     private readonly _solanaRpcApiService: SolanaRpcApiService,
     private readonly _solanaRpcSocketService: SolanaRpcSocketService,
-    private readonly _systemProgramApiService: SystemProgramApiService,
     private readonly _transactionTrackerStore: TransactionTrackerStore
   ) {}
 
@@ -171,12 +168,16 @@ export class AppComponent implements OnInit {
   }
 
   onSendTransaction(walletPublicKey: PublicKey) {
-    this._systemProgramApiService
-      .transfer({
-        fromPubkey: walletPublicKey,
-        toPubkey: Keypair.generate().publicKey,
-        lamports: 1,
-      })
+    this._solanaRpcApiService
+      .createAndSendTransaction(walletPublicKey, (transaction) =>
+        transaction.add(
+          SystemProgram.transfer({
+            fromPubkey: walletPublicKey,
+            toPubkey: Keypair.generate().publicKey,
+            lamports: 1,
+          })
+        )
+      )
       .subscribe();
   }
 }

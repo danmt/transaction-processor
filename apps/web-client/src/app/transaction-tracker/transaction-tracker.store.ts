@@ -16,8 +16,7 @@ import {
   takeWhile,
   tap,
 } from 'rxjs';
-import { SolanaRpcApiService } from './solana-rpc-api.service';
-import { SolanaRpcSocketService } from './solana-rpc-socket.service';
+import { SolanaRpcApiService, SolanaRpcSocketService } from '../solana-rpc';
 
 interface TransactionStatus {
   transaction: Transaction;
@@ -35,9 +34,7 @@ const initialState: ViewModel = {
   transactionStatuses: [],
 };
 
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable()
 export class TransactionTrackerStore extends ComponentStore<ViewModel> {
   readonly transactionStatuses$ = this.select(
     ({ transactionStatuses }) => transactionStatuses

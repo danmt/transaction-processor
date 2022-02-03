@@ -1,16 +1,22 @@
-import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+import { HttpClientModule } from '@angular/common/http';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 import { HdWalletAdapterModule } from '@heavy-duty/wallet-adapter';
+import { environment } from '../environments/environment';
 import { AppComponent } from './app.component';
-import { ConnectivityStatusDirective } from './connectivity-status.directive';
-import { SolanaAuthInterceptor } from './solana-auth.interceptor';
-import { SolanaRpcInterceptor } from './solana-rpc.interceptor';
-import { TransactionTrackerInterceptor } from './transaction-tracker.interceptor';
+import { ConnectivityStatusModule } from './connectivity-status';
+import {
+  solanaRpcApiInterceptorProviders,
+  SolanaRpcModule,
+} from './solana-rpc';
+import {
+  transactionTrackerInterceptorProvider,
+  TransactionTrackerModule,
+} from './transaction-tracker';
 
 @NgModule({
-  declarations: [AppComponent, ConnectivityStatusDirective],
+  declarations: [AppComponent],
   imports: [
     BrowserModule,
     FormsModule,
@@ -18,23 +24,13 @@ import { TransactionTrackerInterceptor } from './transaction-tracker.interceptor
     HdWalletAdapterModule.forRoot({
       autoConnect: true,
     }),
+    SolanaRpcModule.forRoot(environment.rpcEndpoint, environment.rpcWebsocket),
+    ConnectivityStatusModule.forRoot(),
+    TransactionTrackerModule.forRoot(),
   ],
   providers: [
-    {
-      provide: HTTP_INTERCEPTORS,
-      useClass: SolanaAuthInterceptor,
-      multi: true,
-    },
-    {
-      provide: HTTP_INTERCEPTORS,
-      useClass: TransactionTrackerInterceptor,
-      multi: true,
-    },
-    {
-      provide: HTTP_INTERCEPTORS,
-      useClass: SolanaRpcInterceptor,
-      multi: true,
-    },
+    transactionTrackerInterceptorProvider,
+    solanaRpcApiInterceptorProviders,
   ],
   bootstrap: [AppComponent],
 })

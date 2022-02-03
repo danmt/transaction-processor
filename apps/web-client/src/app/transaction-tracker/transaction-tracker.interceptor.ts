@@ -3,14 +3,17 @@ import {
   HttpHandler,
   HttpInterceptor,
   HttpRequest,
+  HttpResponse,
 } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { WalletStore } from '@heavy-duty/wallet-adapter';
-import { concatMap, Observable, throwError } from 'rxjs';
+import { Observable, tap } from 'rxjs';
+import { TransactionTrackerStore } from './transaction-tracker.store';
 
 @Injectable()
-export class SolanaAuthInterceptor implements HttpInterceptor {
-  constructor(private _walletStore: WalletStore) {}
+export class TransactionTrackerInterceptor implements HttpInterceptor {
+  constructor(
+    private readonly _transactionTrackerStore: TransactionTrackerStore
+  ) {}
 
   private isSolanaTransaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,20 +32,15 @@ export class SolanaAuthInterceptor implements HttpInterceptor {
       return next.handle(httpRequest);
     }
 
-    const signer = this._walletStore.signTransaction(httpRequest.body);
-
-    if (!signer) {
-      return throwError(() => new Error('Wallet cannot sign'));
-    }
-
-    return signer.pipe(
-      concatMap((transaction) =>
-        next.handle(
-          httpRequest.clone({
-            body: transaction,
-          })
-        )
-      )
+    return next.handle(httpRequest).pipe(
+      tap((event) => {
+        if (event instanceof HttpResponse && event.body !== null) {
+          this._transactionTrackerStore.reportProgress(
+            httpRequest.body,
+            event.body
+          );
+        }
+      })
     );
   }
 }

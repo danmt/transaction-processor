@@ -3,17 +3,14 @@ import {
   HttpHandler,
   HttpInterceptor,
   HttpRequest,
-  HttpResponse,
 } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, tap } from 'rxjs';
-import { TransactionTrackerStore } from './transaction-tracker.store';
+import { WalletStore } from '@heavy-duty/wallet-adapter';
+import { concatMap, Observable, throwError } from 'rxjs';
 
 @Injectable()
-export class TransactionTrackerInterceptor implements HttpInterceptor {
-  constructor(
-    private readonly _transactionTrackerStore: TransactionTrackerStore
-  ) {}
+export class SolanaRpcApiAuthInterceptor implements HttpInterceptor {
+  constructor(private _walletStore: WalletStore) {}
 
   private isSolanaTransaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,21 +23,26 @@ export class TransactionTrackerInterceptor implements HttpInterceptor {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     httpRequest: HttpRequest<any>,
     next: HttpHandler
-  ): Observable<HttpEvent<{ result: string }[]>> {
+  ): Observable<HttpEvent<string>> {
     // Handle only solana transactions
     if (!this.isSolanaTransaction(httpRequest)) {
       return next.handle(httpRequest);
     }
 
-    return next.handle(httpRequest).pipe(
-      tap((event) => {
-        if (event instanceof HttpResponse && event.body !== null) {
-          this._transactionTrackerStore.reportProgress(
-            httpRequest.body,
-            event.body[0].result
-          );
-        }
-      })
+    const signer = this._walletStore.signTransaction(httpRequest.body);
+
+    if (!signer) {
+      return throwError(() => new Error('Wallet cannot sign'));
+    }
+
+    return signer.pipe(
+      concatMap((transaction) =>
+        next.handle(
+          httpRequest.clone({
+            body: transaction,
+          })
+        )
+      )
     );
   }
 }

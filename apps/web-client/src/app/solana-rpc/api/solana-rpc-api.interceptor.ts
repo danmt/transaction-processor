@@ -4,13 +4,14 @@ import {
   HttpHeaders,
   HttpInterceptor,
   HttpRequest,
+  HttpResponse,
 } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { v4 as uuid } from 'uuid';
 
 @Injectable()
-export class SolanaRpcInterceptor implements HttpInterceptor {
+export class SolanaRpcApiInterceptor implements HttpInterceptor {
   private getParams(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     httpRequest: HttpRequest<any>
@@ -44,26 +45,35 @@ export class SolanaRpcInterceptor implements HttpInterceptor {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     httpRequest: HttpRequest<any>,
     next: HttpHandler
-  ): Observable<HttpEvent<string>> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Observable<HttpEvent<any>> {
     // Handle only the http requests for Solana
     if (!this.isSolanaRequest(httpRequest)) {
       return next.handle(httpRequest);
     }
 
-    return next.handle(
-      httpRequest.clone({
-        body: JSON.stringify([
-          {
-            jsonrpc: '2.0',
-            method: httpRequest.headers.get('solana-rpc-method'),
-            id: uuid(),
-            params: this.getParams(httpRequest),
-          },
-        ]),
-        headers: new HttpHeaders({
-          'content-type': 'application/json',
-        }),
-      })
-    );
+    return next
+      .handle(
+        httpRequest.clone({
+          body: JSON.stringify([
+            {
+              jsonrpc: '2.0',
+              method: httpRequest.headers.get('solana-rpc-method'),
+              id: uuid(),
+              params: this.getParams(httpRequest),
+            },
+          ]),
+          headers: new HttpHeaders({
+            'content-type': 'application/json',
+          }),
+        })
+      )
+      .pipe(
+        map((event) =>
+          event instanceof HttpResponse
+            ? event.clone({ body: event.body[0].result })
+            : event
+        )
+      );
   }
 }
